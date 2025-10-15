@@ -25,7 +25,12 @@ app = FastAPI(title="Safe Mental Health Copilot (Exam Anxiety)")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 SOURCES = {s["id"]: s["url"] for s in yaml.safe_load(open("data/sources.yaml","r",encoding="utf-8"))}
-SOURCE_TAGS = {"WHO_stress":"WHO","CDC_selfcare":"CDC","APA_exam":"APA"}
+def source_tag(source_id: str) -> str:
+    # WHO_stress -> WHO, APA_anxiety -> APA, etc.
+    return source_id.split("_", 1)[0].upper()
+
+SOURCE_TAGS = {sid: source_tag(sid) for sid in SOURCES.keys()}
+SOURCE_TAGS = sorted(set(SOURCE_TAGS.values()))  # e.g., ["APA","CDC","NIH","WHO"]
 
 DB_PATH = "storage/audit_log.sqlite"  # added by pranav - (HITL review console)
 
@@ -122,7 +127,8 @@ def chat(req: ChatRequest):
         hits,
         empathy_level(req.message),
         tier,
-        context_text=context_text
+        context_text=context_text,
+        allowed_tags=SOURCE_TAGS
     )
 
     # 5) Post-generation safety

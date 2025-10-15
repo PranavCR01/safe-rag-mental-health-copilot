@@ -1,3 +1,26 @@
-{"id":"WHO_1","source_id":"WHO_stress","text":"Grounding: notice five things you can see, four you can touch... short sensory practices can lower acute stress."}
-{"id":"CDC_1","source_id":"CDC_selfcare","text":"Maintain routines: regular sleep, balanced meals, and physical activity support stress management."}
-{"id":"APA_1","source_id":"APA_exam","text":"Spacing & practice tests reduce exam anxiety; prepare a plan, simulate conditions, and use timed practice."}
+{"id":"WHO_1","source_id":"WHO_stress","ns":"coping","text":"Brief sensory grounding—e.g., the 5-4-3-2-1 method—can lower acute stress and bring attention back to the present before study or exams."}
+{"id":"WHO_2","source_id":"WHO_stress","ns":"coping","text":"Short breathing exercises and mindful pauses can help regulate stress responses in the moment."}
+{"id":"WHO_3","source_id":"WHO_stress","ns":"coping","text":"Simple, repeatable routines (sleep, meals, movement) support day-to-day stress management."}
+{"id":"CDC_LIVE_1","source_id":"CDC_selfcare","ns":"coping","text":"Maintain regular sleep, balanced meals, and physical activity to support mental wellbeing."}
+{"id":"CDC_LIVE_2","source_id":"CDC_selfcare","ns":"coping","text":"Stay connected with supportive people; talking with trusted friends, family, or community can reduce stress."}
+{"id":"CDC_LIVE_3","source_id":"CDC_selfcare","ns":"general-mental-health","text":"If stress or anxiety interferes with daily life, consider contacting a healthcare professional for guidance."}
+{"id":"APA_A_1","source_id":"APA_anxiety","ns":"general-mental-health","text":"Anxiety becomes a concern when it is persistent, intense, and starts to impair daily functioning; skills training and support can help."}
+{"id":"APA_A_2","source_id":"APA_anxiety","ns":"study-skills","text":"Breaking tasks into small steps and practicing gradual exposure to anxiety-provoking study situations can reduce avoidance and build confidence."}
+{"id":"APA_A_3","source_id":"APA_anxiety","ns":"coping","text":"Combining calming strategies (breathing, grounding) with problem-solving and planning often works better than using either alone."}
+{"id":"CDC_HELP_1","source_id":"CDC_helpline","ns":"crisis","text":"In the U.S., immediate support is available by calling or texting 988 or chatting via 988lifeline.org."}
+{"id":"CDC_HELP_2","source_id":"CDC_helpline","ns":"crisis","text":"If you or someone else may be in danger or at risk of harming themselves, seek emergency help right away."}
+{"id":"CDC_HELP_3","source_id":"CDC_helpline","ns":"general-mental-health","text":"Supportive caregiving includes listening without judgment and helping connect to professional care when needed."}
+{"id":"WHO_AX_1","source_id":"WHO_anxiety_disorders","ns":"general-mental-health","text":"Anxiety disorders involve excessive worry and physical symptoms (e.g., restlessness, tension) that persist and affect daily life."}
+{"id":"WHO_AX_2","source_id":"WHO_anxiety_disorders","ns":"general-mental-health","text":"Effective treatments exist; seeking care can help people manage symptoms and daily functioning."}
+{"id":"WHO_AX_3","source_id":"WHO_anxiety_disorders","ns":"coping","text":"Self-management strategies like regular sleep, activity, and stress-reduction practices can complement professional care."}
+{"id":"APA_S_1","source_id":"APA_stress","ns":"coping","text":"Stress management blends emotion-focused skills (breathing, grounding) with problem-focused steps (planning, prioritizing)."}
+{"id":"APA_S_2","source_id":"APA_stress","ns":"study-skills","text":"Prioritize tasks, make a short next-action list, and work in focused time blocks to reduce overload."}
+{"id":"APA_S_3","source_id":"APA_stress","ns":"coping","text":"Limiting excessive stimulants (e.g., caffeine late in the day) and building wind-down routines can lower stress."}
+{"id":"NIH_STRESS_1","source_id":"NIH_stress","ns":"general-mental-health","text":"Chronic stress is linked to health impacts; consistent stress-reduction practices can support wellbeing over time."}
+{"id":"NIH_STRESS_2","source_id":"NIH_stress","ns":"coping","text":"Mindfulness-type practices and regular physical activity are associated with lower perceived stress in many studies."}
+{"id":"NIH_ADULT_1","source_id":"NIH_adult_stress","ns":"general-mental-health","text":"Among adults, stress relates to sleep, mood, and daily functioning; supportive routines and coping skills can improve outcomes."}
+{"id":"NIH_ADULT_2","source_id":"NIH_adult_stress","ns":"coping","text":"Scheduling brief movement, social connection, and recovery time can help manage ongoing stressors."}
+{"id":"APA_TIPS_1","source_id":"APA_tips","ns":"coping","text":"Use short, regular breaks, set boundaries on commitments, and practice self-compassion to reduce stress load."}
+{"id":"APA_TIPS_2","source_id":"APA_tips","ns":"study-skills","text":"Plan study in small, scheduled blocks with clear goals; avoid cramming to lower stress and improve retention."}
+{"id":"APA_SLEEP_1","source_id":"APA_sleep","ns":"sleep","text":"Sleep loss can heighten anxiety and stress responses; keeping a consistent sleep schedule helps mood and focus."}
+{"id":"APA_SLEEP_2","source_id":"APA_sleep","ns":"sleep","text":"Wind-down routines—dim light, screens off before bed, and a regular bedtime—support better sleep quality."}
