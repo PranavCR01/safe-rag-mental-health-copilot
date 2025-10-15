@@ -1,0 +1,33 @@
+# --- Environment & system ---
+.venv/
+.env
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+.DS_Store
+
+# --- Local storage & generated data ---
+storage/
+*.sqlite
+*.npy
+*.faiss
+
+# --- Build & packaging ---
+*.egg-info/
+dist/
+build/
+
+# --- Logs & temp files ---
+*.log
+*.tmp
+
+# --- VSCode / IDE metadata ---
+.vscode/
+.idea/
+
+# --- Data files ---
+data/*.csv
+data/*.json
+data/*.jsonl
+data/*.yaml
+!data/sources.yaml   # keep this one if you want sources tracked
