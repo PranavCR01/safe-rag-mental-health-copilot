@@ -1,24 +1,31 @@
-import os, sqlite3, yaml
+import os, sqlite3, yaml, json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from core.schema import ChatRequest, ChatResponse, Citation
-from core.risk import classify_tier
+from core.schema import ChatRequest, ChatResponse, Citation, RiskDetails, ToneAnalysis
+from core.risk import classify_tier_with_confidence  # UPDATED: use confidence version
 from core.tone import empathy_level
 from core.retriever import search
 from core.composer import compose
 from core.safety import should_abstain, abstention_reply, red_flag
 
-# --- NEW: LangChain memory for multi-turn context ---
+# --- LangChain memory for multi-turn context ---
 from langchain_openai import ChatOpenAI
-from langchain.memory import ConversationSummaryBufferMemory
+try:
+    from langchain.memory import ConversationSummaryBufferMemory
+except ImportError:
+    try:
+        from langchain_community.memory import ConversationSummaryBufferMemory
+    except ImportError:
+        print("Warning: Could not import ConversationSummaryBufferMemory, using simple memory")
+        ConversationSummaryBufferMemory = None
 
-# ===== extra imports for HITL review console =====  # added by pranav - (HITL review console)
+# ===== extra imports for HITL review console =====
 from fastapi import HTTPException, Query  
 from fastapi.responses import StreamingResponse  
 from core.schema import ReviewListItem, ReviewUpdate  
-import csv, io, json  
+import csv, io
 
 load_dotenv()
 app = FastAPI(title="Safe Mental Health Copilot (Exam Anxiety)")
@@ -26,28 +33,29 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 SOURCES = {s["id"]: s["url"] for s in yaml.safe_load(open("data/sources.yaml","r",encoding="utf-8"))}
 def source_tag(source_id: str) -> str:
-    # WHO_stress -> WHO, APA_anxiety -> APA, etc.
     return source_id.split("_", 1)[0].upper()
 
 SOURCE_TAGS = {sid: source_tag(sid) for sid in SOURCES.keys()}
-SOURCE_TAGS = sorted(set(SOURCE_TAGS.values()))  # e.g., ["APA","CDC","NIH","WHO"]
+SOURCE_TAGS = sorted(set(SOURCE_TAGS.values()))
 
-DB_PATH = "storage/audit_log.sqlite"  # added by pranav - (HITL review console)
+DB_PATH = "storage/audit_log.sqlite"
 
-# -------- SQLite audit log (unchanged) --------
+# -------- SQLite audit log WITH CONFIDENCE TRACKING --------
 def init_db():
     os.makedirs("storage", exist_ok=True)
-    con = sqlite3.connect(DB_PATH)  # changed path var  # added by pranav - (HITL review console)
+    con = sqlite3.connect(DB_PATH)
     con.execute("""CREATE TABLE IF NOT EXISTS chats(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT, tier INTEGER, abstained INTEGER,
         user_msg TEXT, model_reply TEXT, citations TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );""")
-    # ----- schema migration: add HITL columns if missing -----  # added by pranav - (HITL review console)
+    
     cur = con.cursor()  
     cur.execute("PRAGMA table_info(chats);")  
     cols = {r[1] for r in cur.fetchall()}  
+    
+    # HITL columns
     if "reviewed" not in cols:  
         con.execute("ALTER TABLE chats ADD COLUMN reviewed INTEGER DEFAULT 0;")  
     if "label" not in cols:  
@@ -57,37 +65,62 @@ def init_db():
     if "rating_factual" not in cols:  
         con.execute("ALTER TABLE chats ADD COLUMN rating_factual INTEGER;")  
     if "human_notes" not in cols:  
-        con.execute("ALTER TABLE chats ADD COLUMN human_notes TEXT;")  
+        con.execute("ALTER TABLE chats ADD COLUMN human_notes TEXT;")
+    
+    # NEW: Confidence tracking columns
+    if "confidence" not in cols:
+        con.execute("ALTER TABLE chats ADD COLUMN confidence REAL;")
+    if "risk_details" not in cols:
+        con.execute("ALTER TABLE chats ADD COLUMN risk_details TEXT;")
+    
     con.commit()  
     con.close()
+
 init_db()
 
-def save_chat(user_id, tier, abstained, user_msg, model_reply, citations):
-    con = sqlite3.connect(DB_PATH)  # changed path var  # added by pranav - (HITL review console)
-    con.execute("INSERT INTO chats(user_id,tier,abstained,user_msg,model_reply,citations) VALUES (?,?,?,?,?,?)",
-                (user_id, tier, 1 if abstained else 0, user_msg, model_reply, str(citations)))
-    con.commit(); con.close()
+def save_chat(user_id, tier, abstained, user_msg, model_reply, citations, confidence=None, risk_details=None):
+    """Save chat with confidence score and risk details"""
+    con = sqlite3.connect(DB_PATH)
+    risk_details_json = json.dumps(risk_details) if risk_details else None
+    
+    con.execute("""INSERT INTO chats(
+        user_id, tier, abstained, user_msg, model_reply, citations, confidence, risk_details
+    ) VALUES (?,?,?,?,?,?,?,?)""",
+                (user_id, tier, 1 if abstained else 0, user_msg, model_reply, 
+                 str(citations), confidence, risk_details_json))
+    con.commit()
+    con.close()
 
-# -------- Per-user memory (LangChain) --------
-# One memory per user_id; in production you may persist this.
-_LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0)  # uses OPENAI_API_KEY
-_MEMORY: dict[str, ConversationSummaryBufferMemory] = {}
+# -------- Per-user memory --------
+class SimpleMemory:
+    def __init__(self):
+        self.history = []
+    def load_memory_variables(self, inputs):
+        return {"chat_history": "\n".join(self.history[-5:])}
+    def save_context(self, inputs, outputs):
+        self.history.append(f"User: {inputs.get('input', '')}")
+        self.history.append(f"Assistant: {outputs.get('output', '')}")
 
-def get_memory(user_id: str) -> ConversationSummaryBufferMemory:
+_LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0) if ConversationSummaryBufferMemory else None
+_MEMORY: dict[str, any] = {}
+
+def get_memory(user_id: str):
     mem = _MEMORY.get(user_id)
     if mem is None:
-        mem = ConversationSummaryBufferMemory(
-            llm=_LLM,
-            max_token_limit=1200,
-            memory_key="chat_history",   
-            return_messages=False
-        )
+        if ConversationSummaryBufferMemory and _LLM:
+            mem = ConversationSummaryBufferMemory(
+                llm=_LLM,
+                max_token_limit=1200,
+                memory_key="chat_history",   
+                return_messages=False
+            )
+        else:
+            mem = SimpleMemory()
         _MEMORY[user_id] = mem
     return mem
 
 def load_context(user_id: str) -> str:
     mem = get_memory(user_id)
-    # Returns { "chat_history": "<summary + recent turns>" }
     vars = mem.load_memory_variables({})
     return vars.get("chat_history", "")
 
@@ -95,33 +128,64 @@ def save_turn(user_id: str, user_msg: str, assistant_msg: str):
     mem = get_memory(user_id)
     mem.save_context({"input": user_msg}, {"output": assistant_msg})
 
-# -------- Main endpoint --------
+# -------- Main endpoint WITH CONFIDENCE SCORING --------
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    # 1) Update memory with the incoming user turn (we also save after our reply)
-    #    We save after reply to keep parity, but loading context first is fine.
+    # 1) Load conversation context
     context_text = load_context(req.user_id)
 
-    # 2) Risk & early abstention
-    tier = classify_tier(req.message)
+    # 2) Risk classification WITH CONFIDENCE
+    tier, confidence, details = classify_tier_with_confidence(req.message)
+    risk_details = RiskDetails(**details)
+
+    from core.tone import analyze_tone_and_cues, build_tone_block
+    tone_analysis_dict = analyze_tone_and_cues(req.message)
+    tone_block_text = build_tone_block(tone_analysis_dict)
+    
+    # Create ToneAnalysis object
+    tone_analysis = ToneAnalysis(
+        empathy_level=tone_analysis_dict["empathy_level"],
+        cues=tone_analysis_dict["cues"],
+        template=tone_analysis_dict["template"],
+        tone_block=tone_block_text
+    )
+    
+    # 3) Early abstention for crisis
     if should_abstain(tier, had_evidence=True):
         if tier == 3:
             reply = abstention_reply(tier)
-            save_chat(req.user_id, tier, True, req.message, reply, "[]")
-            # also record conversation turn in memory
+            save_chat(req.user_id, tier, True, req.message, reply, "[]", 
+                     confidence=confidence, risk_details=details)
             save_turn(req.user_id, req.message, reply)
-            return ChatResponse(text=reply, citations=[], tier=tier, abstained=True)
+            return ChatResponse(
+                text=reply, 
+                citations=[], 
+                tier=tier, 
+                abstained=True,
+                confidence=confidence,
+                risk_details=risk_details,
+                tone_analysis=tone_analysis 
+            )
 
-    # 3) Retrieval
+    # 4) Retrieval
     hits = search(req.message, k=4)
     had_evidence = len(hits) > 0
     if should_abstain(tier, had_evidence):
         reply = abstention_reply(tier)
-        save_chat(req.user_id, tier, True, req.message, reply, "[]")
+        save_chat(req.user_id, tier, True, req.message, reply, "[]",
+                 confidence=confidence, risk_details=details)
         save_turn(req.user_id, req.message, reply)
-        return ChatResponse(text=reply, citations=[], tier=tier, abstained=True)
+        return ChatResponse(
+            text=reply, 
+            citations=[], 
+            tier=tier, 
+            abstained=True,
+            confidence=confidence,
+            risk_details=risk_details,
+            tone_analysis=tone_analysis 
+        )
 
-    # 4) Compose with CONTEXT (for personalization only)
+    # 5) Compose with CONTEXT
     text, tags = compose(
         req.message,
         hits,
@@ -131,26 +195,44 @@ def chat(req: ChatRequest):
         allowed_tags=SOURCE_TAGS
     )
 
-    # 5) Post-generation safety
+    # 6) Post-generation safety
     if red_flag(text):
         reply = abstention_reply(3)
-        save_chat(req.user_id, 3, True, req.message, reply, "[]")
+        save_chat(req.user_id, 3, True, req.message, reply, "[]",
+                 confidence=confidence, risk_details=details)
         save_turn(req.user_id, req.message, reply)
-        return ChatResponse(text=reply, citations=[], tier=3, abstained=True)
+        return ChatResponse(
+            text=reply, 
+            citations=[], 
+            tier=3, 
+            abstained=True,
+            confidence=confidence,
+            risk_details=risk_details,
+            tone_analysis=tone_analysis 
+        )
 
-    # 6) Render citations
+    # 7) Render citations
     citations = []
     for tag, url in tags:
         citations.append(Citation(source_id=tag.strip("[]"), url=url))
 
-    # 7) Save logs + update memory with assistant reply
-    save_chat(req.user_id, tier, False, req.message, text, str(citations))
+    # 8) Save logs + update memory
+    save_chat(req.user_id, tier, False, req.message, text, str(citations),
+             confidence=confidence, risk_details=details)
     save_turn(req.user_id, req.message, text)
 
-    return ChatResponse(text=text, citations=citations, tier=tier, abstained=False)
+    return ChatResponse(
+        text=text, 
+        citations=citations, 
+        tier=tier, 
+        abstained=False,
+        confidence=confidence,
+        risk_details=risk_details,
+        tone_analysis=tone_analysis 
+    )
 
 # ======================================================
-#                 HITL REVIEW CONSOLE                           # added by pranav - (HITL review console)
+#             HITL REVIEW CONSOLE
 # ======================================================  
 
 def _dict_factory(cursor, row):  
@@ -241,12 +323,13 @@ def update_review(chat_id: int, upd: ReviewUpdate):
 
 @app.get("/metrics")  
 def metrics():  
-    """Quick counts/averages for reports."""  
+    """Quick counts/averages for reports WITH CONFIDENCE."""  
     con = sqlite3.connect(DB_PATH)  
     cur = con.cursor()  
     def one(q):  
         cur.execute(q); r = cur.fetchone()  
         return r[0] if r and r[0] is not None else 0  
+    
     m = {  
         "total": one("SELECT COUNT(*) FROM chats"),  
         "reviewed": one("SELECT COUNT(*) FROM chats WHERE reviewed=1"),  
@@ -256,7 +339,13 @@ def metrics():
         "label_low_empathy": one("SELECT COUNT(*) FROM chats WHERE label='low_empathy'"),  
         "label_hallucination": one("SELECT COUNT(*) FROM chats WHERE label='hallucination'"),  
         "avg_empathy": one("SELECT AVG(rating_empathy) FROM chats WHERE rating_empathy IS NOT NULL"),  
-        "avg_factual": one("SELECT AVG(rating_factual) FROM chats WHERE rating_factual IS NOT NULL"),  
+        "avg_factual": one("SELECT AVG(rating_factual) FROM chats WHERE rating_factual IS NOT NULL"),
+        # NEW: Confidence metrics
+        "avg_confidence": one("SELECT AVG(confidence) FROM chats WHERE confidence IS NOT NULL"),
+        "avg_confidence_tier1": one("SELECT AVG(confidence) FROM chats WHERE tier=1 AND confidence IS NOT NULL"),
+        "avg_confidence_tier2": one("SELECT AVG(confidence) FROM chats WHERE tier=2 AND confidence IS NOT NULL"),
+        "avg_confidence_tier3": one("SELECT AVG(confidence) FROM chats WHERE tier=3 AND confidence IS NOT NULL"),
+        "low_confidence_count": one("SELECT COUNT(*) FROM chats WHERE confidence < 0.5"),
     }
     con.close()  
     return m  

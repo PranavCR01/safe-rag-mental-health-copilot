@@ -1,5 +1,6 @@
 # --- Environment & system ---
 .venv/
+venv/
 .env
 __pycache__/
 .ipynb_checkpoints/
