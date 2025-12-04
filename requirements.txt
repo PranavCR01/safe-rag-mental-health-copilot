@@ -1,13 +1,31 @@
+# Requirements.txt - Python 3.14 Compatible
+# Updated to avoid pydantic-core and tiktoken build issues
+
 fastapi==0.115.0
 uvicorn==0.30.6
-pydantic==2.9.2
+
+# Use pydantic v2 that supports Python 3.14
+# Install with pre-built wheels
+pydantic==2.10.5
+
 python-dotenv==1.0.1
-openai==1.47.0
-tiktoken==0.7.0
-faiss-cpu==1.8.0
+
+# OpenAI - install without tiktoken dependency
+openai>=1.0.0
+
+# Skip tiktoken - not needed for the confidence scoring system
+# If you absolutely need it, install pre-built wheel manually
+
+faiss-cpu==1.12.0
 sqlite-utils==3.36
 packaging==25.0
 PyYAML==6.0.2
 httpx==0.27.2
-langchain_openai==0.3.35
-langchain==0.3.27
+
+# LangChain - use versions that support Python 3.14
+langchain-openai>=0.3.0
+langchain>=0.3.27
+langchain-core>=0.3.0
+
+# Additional dependencies that might be needed
+numpy>=1.24.0
