@@ -180,7 +180,19 @@ def chat(req: ChatRequest):
             reply = abstention_reply(tier)
             save_chat(req.user_id, tier, True, req.message, reply, "[]", 
                      confidence=confidence, risk_details=details)
-            save_chat_turn(req.user_id, req.message, text)
+            assistant_metadata = {
+                "tier": tier,
+                "confidence": confidence,
+                "citations": [],
+                "tone_analysis": {
+                    "empathy_level": tone_analysis_dict["empathy_level"],
+                    "template": tone_analysis_dict["template"],
+                    "cues": tone_analysis_dict["cues"]
+                },
+                "risk_details": details
+            }
+            save_chat_turn(req.user_id, req.message, reply, assistant_metadata=assistant_metadata)
+
             return ChatResponse(
                 text=reply, 
                 citations=[], 
@@ -198,7 +210,18 @@ def chat(req: ChatRequest):
         reply = abstention_reply(tier)
         save_chat(req.user_id, tier, True, req.message, reply, "[]",
                  confidence=confidence, risk_details=details)
-        save_chat_turn(req.user_id, req.message, text)
+        assistant_metadata = {
+            "tier": tier,
+            "confidence": confidence,
+            "citations": [],
+            "tone_analysis": {
+                "empathy_level": tone_analysis_dict["empathy_level"],
+                "template": tone_analysis_dict["template"],
+                "cues": tone_analysis_dict["cues"]
+            },
+            "risk_details": details
+        }
+        save_chat_turn(req.user_id, req.message, reply, assistant_metadata=assistant_metadata)
         return ChatResponse(
             text=reply, 
             citations=[], 
@@ -224,7 +247,18 @@ def chat(req: ChatRequest):
         reply = abstention_reply(3)
         save_chat(req.user_id, 3, True, req.message, reply, "[]",
                  confidence=confidence, risk_details=details)
-        save_chat_turn(req.user_id, req.message, text)
+        assistant_metadata = {
+            "tier": 3,
+            "confidence": confidence,
+            "citations": [],
+            "tone_analysis": {
+                "empathy_level": tone_analysis_dict["empathy_level"],
+                "template": tone_analysis_dict["template"],
+                "cues": tone_analysis_dict["cues"]
+            },
+            "risk_details": details
+        }
+        save_chat_turn(req.user_id, req.message, reply, assistant_metadata=assistant_metadata)
         return ChatResponse(
             text=reply, 
             citations=[], 
@@ -243,7 +277,18 @@ def chat(req: ChatRequest):
     # 8) Save logs + update memory
     save_chat(req.user_id, tier, False, req.message, text, str(citations),
              confidence=confidence, risk_details=details)
-    save_chat_turn(req.user_id, req.message, text)
+    assistant_metadata = {
+        "tier": tier,
+        "confidence": confidence,
+        "citations": [{"source_id": c.source_id, "url": c.url} for c in citations],
+        "tone_analysis": {
+            "empathy_level": tone_analysis_dict["empathy_level"],
+            "template": tone_analysis_dict["template"],
+            "cues": tone_analysis_dict["cues"]
+        },
+        "risk_details": details
+    }
+    save_chat_turn(req.user_id, req.message, text, assistant_metadata=assistant_metadata)
 
     return ChatResponse(
         text=text, 
