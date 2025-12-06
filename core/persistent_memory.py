@@ -1,31 +1,45 @@
+# 
+
 # core/persistent_memory.py
 
 """
-Persistent conversation memory using SQLite instead of in-memory only.
-This ensures context is maintained even after server restarts.
+Persistent conversation memory using SQLite with metadata support.
+Saves analysis data (tier, confidence, citations) along with messages.
 """
 
 import sqlite3
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 import os
+import json
+import time
 
 DB_PATH = "storage/conversation_memory.sqlite"
 
 def init_memory_db():
-    """Initialize the persistent memory database"""
+    """Initialize the persistent memory database with metadata column"""
     os.makedirs("storage", exist_ok=True)
     con = sqlite3.connect(DB_PATH)
+    
+    # Create main table
     con.execute("""
         CREATE TABLE IF NOT EXISTS conversation_turns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
-            role TEXT NOT NULL,  -- 'user' or 'assistant'
+            role TEXT NOT NULL,
             message TEXT NOT NULL,
+            metadata TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             session_id TEXT
         )
     """)
+    
+    # Add metadata column if it doesn't exist (for existing databases)
+    try:
+        con.execute("ALTER TABLE conversation_turns ADD COLUMN metadata TEXT")
+    except:
+        pass  # Column already exists
+    
     con.execute("""
         CREATE INDEX IF NOT EXISTS idx_user_id ON conversation_turns(user_id)
     """)
@@ -43,21 +57,27 @@ def save_conversation_turn(
     user_id: str,
     role: str,
     message: str,
+    metadata: Optional[Dict[str, Any]] = None,
     session_id: Optional[str] = None
 ):
     """
-    Save a single conversation turn to persistent storage
+    Save a single conversation turn with optional metadata
     
     Args:
         user_id: Unique user identifier
         role: 'user' or 'assistant'
         message: The message content
+        metadata: Optional dict with analysis data, citations, etc.
         session_id: Optional session grouping
     """
     con = sqlite3.connect(DB_PATH)
+    
+    # Convert metadata to JSON string
+    metadata_json = json.dumps(metadata) if metadata else None
+    
     con.execute(
-        "INSERT INTO conversation_turns (user_id, role, message, session_id) VALUES (?, ?, ?, ?)",
-        (user_id, role, message, session_id)
+        "INSERT INTO conversation_turns (user_id, role, message, metadata, session_id) VALUES (?, ?, ?, ?, ?)",
+        (user_id, role, message, metadata_json, session_id)
     )
     con.commit()
     con.close()
@@ -67,9 +87,9 @@ def get_conversation_history(
     user_id: str,
     limit: int = 10,
     hours_back: int = 24
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     """
-    Retrieve recent conversation history for a user
+    Retrieve recent conversation history with metadata
     
     Args:
         user_id: User to get history for
@@ -77,15 +97,16 @@ def get_conversation_history(
         hours_back: Only get messages from the last N hours
     
     Returns:
-        List of conversation turns, each with 'role' and 'message'
+        List of conversation turns with 'role', 'message', and 'metadata'
     """
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     
     cutoff_time = datetime.now() - timedelta(hours=hours_back)
     
+    # Get messages in chronological order
     cursor = con.execute("""
-        SELECT role, message, created_at
+        SELECT role, message, metadata, created_at
         FROM conversation_turns
         WHERE user_id = ? AND created_at >= ?
         ORDER BY created_at ASC
@@ -95,14 +116,27 @@ def get_conversation_history(
     rows = cursor.fetchall()
     con.close()
     
-    # Reverse to get chronological order (oldest first)
-    # Already in chronological order, no need to reverse
-    history = [{"role": row["role"], "message": row["message"]} for row in rows]
+    # Parse metadata from JSON
+    history = []
+    for row in rows:
+        turn = {
+            "role": row["role"],
+            "message": row["message"]
+        }
+        
+        # Parse metadata if it exists
+        if row["metadata"]:
+            try:
+                turn["metadata"] = json.loads(row["metadata"])
+            except:
+                pass
+        
+        history.append(turn)
     
     return history
 
 
-def format_conversation_context(history: List[Dict[str, str]]) -> str:
+def format_conversation_context(history: List[Dict[str, Any]]) -> str:
     """
     Format conversation history into a readable context string
     
@@ -140,11 +174,10 @@ def get_conversation_summary(user_id: str, max_chars: int = 500) -> str:
     if not history:
         return "(No previous conversation)"
     
-    # Simple summary: Last few turns
     summary_parts = []
     char_count = 0
     
-    for turn in reversed(history):  # Start from most recent
+    for turn in reversed(history):
         line = f"{turn['role']}: {turn['message']}"
         if char_count + len(line) > max_chars:
             break
@@ -156,7 +189,7 @@ def get_conversation_summary(user_id: str, max_chars: int = 500) -> str:
 
 def clear_old_conversations(days_old: int = 30):
     """
-    Clear conversations older than N days (privacy/cleanup)
+    Clear conversations older than N days
     
     Args:
         days_old: Delete conversations older than this many days
@@ -179,20 +212,15 @@ def clear_old_conversations(days_old: int = 30):
 def get_user_conversation_stats(user_id: str) -> Dict:
     """
     Get statistics about a user's conversation history
-    
-    Returns:
-        Dictionary with conversation stats
     """
     con = sqlite3.connect(DB_PATH)
     
-    # Total turns
     cursor = con.execute(
         "SELECT COUNT(*) as count FROM conversation_turns WHERE user_id = ?",
         (user_id,)
     )
     total_turns = cursor.fetchone()[0]
     
-    # First conversation
     cursor = con.execute(
         "SELECT created_at FROM conversation_turns WHERE user_id = ? ORDER BY created_at ASC LIMIT 1",
         (user_id,)
@@ -200,7 +228,6 @@ def get_user_conversation_stats(user_id: str) -> Dict:
     first_turn = cursor.fetchone()
     first_date = first_turn[0] if first_turn else None
     
-    # Last conversation
     cursor = con.execute(
         "SELECT created_at FROM conversation_turns WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
         (user_id,)
@@ -220,22 +247,34 @@ def get_user_conversation_stats(user_id: str) -> Dict:
 
 # ===== INTEGRATION HELPERS =====
 
-def save_chat_turn(user_id: str, user_message: str, assistant_message: str):
+def save_chat_turn(
+    user_id: str, 
+    user_message: str, 
+    assistant_message: str,
+    assistant_metadata: Optional[Dict[str, Any]] = None
+):
     """
-    Convenience function to save both user and assistant messages
+    Save both user and assistant messages with optional metadata
     
     Args:
         user_id: User identifier
         user_message: What the user said
         assistant_message: What the assistant replied
+        assistant_metadata: Optional dict with analysis, citations, etc.
     """
-    save_conversation_turn(user_id, "user", user_message)
-    save_conversation_turn(user_id, "assistant", assistant_message)
+    # Save user message (no metadata)
+    save_conversation_turn(user_id, "user", user_message, metadata=None)
+    
+    # Small delay for timestamp ordering
+    time.sleep(0.01)
+    
+    # Save assistant message with metadata
+    save_conversation_turn(user_id, "assistant", assistant_message, metadata=assistant_metadata)
 
 
 def load_context_for_compose(user_id: str, format_type: str = "full") -> str:
     """
-    Load conversation context in format suitable for compose()
+    Load conversation context for LLM
     
     Args:
         user_id: User to load context for
@@ -247,47 +286,40 @@ def load_context_for_compose(user_id: str, format_type: str = "full") -> str:
     if format_type == "summary":
         return get_conversation_summary(user_id, max_chars=500)
     else:
-        history = get_conversation_history(user_id, limit=6)  # Last 3 exchanges
+        history = get_conversation_history(user_id, limit=6)
         return format_conversation_context(history)
 
 
 # ===== TESTING =====
 
 if __name__ == "__main__":
-    print("Testing Persistent Memory System...\n")
+    print("Testing Persistent Memory with Metadata...\n")
     
-    # Test user
-    test_user = "test_user_123"
+    test_user = "test_user_metadata"
     
-    # Save some conversation turns
-    print("1. Saving conversation turns...")
+    # Save conversation with metadata
+    print("1. Saving conversation with metadata...")
     save_chat_turn(
         test_user,
-        "I'm really stressed about my exam tomorrow",
-        "I understand. Let's work through this together. What subject is the exam?"
+        "I'm stressed about my exam",
+        "I understand. Let's work through this together.",
+        assistant_metadata={
+            "tier": 1,
+            "confidence": 0.85,
+            "citations": [{"source_id": "APA_anxiety", "url": "https://example.com"}],
+            "tone_analysis": {"empathy_level": 2, "template": "supportive"}
+        }
     )
-    save_chat_turn(
-        test_user,
-        "It's for calculus",
-        "Calculus can be challenging. What topics are you most worried about?"
-    )
     
-    # Retrieve history
-    print("\n2. Retrieving conversation history...")
-    history = get_conversation_history(test_user, limit=10)
-    for turn in history:
-        print(f"  {turn['role']}: {turn['message'][:50]}...")
+    # Retrieve and check metadata
+    print("\n2. Retrieving conversation with metadata...")
+    history = get_conversation_history(test_user, limit=10, hours_back=24*7)
     
-    # Get formatted context
-    print("\n3. Formatted context for LLM:")
-    context = load_context_for_compose(test_user)
-    print(context)
+    for i, turn in enumerate(history):
+        print(f"\n  Turn {i+1}:")
+        print(f"    Role: {turn['role']}")
+        print(f"    Message: {turn['message'][:50]}...")
+        if 'metadata' in turn:
+            print(f"    Metadata: {turn['metadata']}")
     
-    # Get stats
-    print("\n4. User conversation stats:")
-    stats = get_user_conversation_stats(test_user)
-    print(f"  Total turns: {stats['total_turns']}")
-    print(f"  First conversation: {stats['first_conversation']}")
-    print(f"  Last conversation: {stats['last_conversation']}")
-    
-    print("\n✅ Persistent memory working!")
+    print("\n✅ Persistent memory with metadata working!")
