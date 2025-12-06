@@ -21,19 +21,11 @@ st.markdown("""
         font-size: 16px;
     }
     .chat-message {
-        padding: 1.5rem;
+        padding: 0.5rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
         display: flex;
         flex-direction: column;
-    }
-    .user-message {
-        background-color: #e3f2fd;
-        border-left: 5px solid #2196F3;
-    }
-    .assistant-message {
-        background-color: #f1f8e9;
-        border-left: 5px solid #8BC34A;
     }
     .metric-card {
         background-color: white;
@@ -56,13 +48,44 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # API Configuration
-API_URL = "http://localhost:8000/chat"
+API_URL = "http://localhost:8000"
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "user_id" not in st.session_state:
     st.session_state.user_id = "streamlit_user"
+if "history_loaded" not in st.session_state:
+    st.session_state.history_loaded = False
+
+# ========================================
+# FIX: LOAD CONVERSATION HISTORY FUNCTION
+# ========================================
+def load_conversation_history(user_id: str):
+    """Load conversation history from backend"""
+    try:
+        response = requests.get(f"{API_URL}/conversation/history/{user_id}")
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("has_history"):
+                history = data["history"]
+                
+                # Clear current messages
+                st.session_state.messages = []
+                
+                # Load history into session state
+                for turn in history:
+                    st.session_state.messages.append({
+                        "role": turn["role"],
+                        "content": turn["message"]
+                    })
+                
+                return len(history)
+        return 0
+    except Exception as e:
+        st.error(f"Error loading history: {e}")
+        return 0
+
 
 def get_tier_badge(tier: int) -> str:
     """Generate HTML badge for risk tier"""
@@ -158,7 +181,7 @@ def send_message(user_message: str) -> Dict[str, Any]:
     """Send message to API and return response"""
     try:
         response = requests.post(
-            API_URL,
+            f"{API_URL}/chat",
             json={
                 "user_id": st.session_state.user_id,
                 "message": user_message
@@ -308,14 +331,39 @@ st.markdown("*Your AI companion for exam anxiety support*")
 # Sidebar - User Settings
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
-    st.session_state.user_id = st.text_input(
+    
+    # ========================================
+    # FIX: USER ID INPUT WITH HISTORY LOADING
+    # ========================================
+    new_user_id = st.text_input(
         "User ID",
         value=st.session_state.user_id,
-        help="Your unique identifier for the session"
+        help="Your unique identifier. Change to load a different conversation."
     )
+    
+    # Check if user ID changed
+    if new_user_id != st.session_state.user_id:
+        st.session_state.user_id = new_user_id
+        st.session_state.history_loaded = False
+        st.session_state.messages = []
+        st.rerun()
+    
+    # Load history if not loaded yet
+    if not st.session_state.history_loaded:
+        with st.spinner("Loading conversation history..."):
+            num_loaded = load_conversation_history(st.session_state.user_id)
+            st.session_state.history_loaded = True
+            
+            if num_loaded > 0:
+                st.success(f"✅ Loaded {num_loaded} messages")
+            else:
+                st.info("📝 New conversation")
+    
+    st.markdown("---")
     
     if st.button("🗑️ Clear Chat History"):
         st.session_state.messages = []
+        st.session_state.history_loaded = False
         st.rerun()
     
     st.markdown("---")
@@ -375,7 +423,7 @@ if user_input:
         display_message(
             "assistant",
             assistant_text,
-            metadata={"citations": citations}
+            metadata={"citations": citations, "full_response": response_data}
         )
         
         # Display analysis in sidebar

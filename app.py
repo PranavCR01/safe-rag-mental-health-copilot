@@ -27,6 +27,8 @@ from fastapi.responses import StreamingResponse
 from core.schema import ReviewListItem, ReviewUpdate  
 import csv, io
 
+from core.persistent_memory import save_chat_turn, load_context_for_compose, get_conversation_history, get_user_conversation_stats
+
 load_dotenv()
 app = FastAPI(title="Safe Mental Health Copilot (Exam Anxiety)")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -76,7 +78,29 @@ def init_db():
     con.commit()  
     con.close()
 
+
+def init_mood_db():
+    """Initialize mood tracking table"""
+    con = sqlite3.connect(DB_PATH)
+    
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS mood_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            mood_score INTEGER NOT NULL,
+            anxiety_level INTEGER NOT NULL,
+            triggers TEXT,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    con.execute("CREATE INDEX IF NOT EXISTS idx_mood_user ON mood_entries(user_id)")
+    con.commit()
+    con.close()
+
 init_db()
+init_mood_db()
 
 def save_chat(user_id, tier, abstained, user_msg, model_reply, citations, confidence=None, risk_details=None):
     """Save chat with confidence score and risk details"""
@@ -132,7 +156,7 @@ def save_turn(user_id: str, user_msg: str, assistant_msg: str):
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     # 1) Load conversation context
-    context_text = load_context(req.user_id)
+    context_text = load_context_for_compose(req.user_id, format_type='full')
 
     # 2) Risk classification WITH CONFIDENCE
     tier, confidence, details = classify_tier_with_confidence(req.message)
@@ -156,7 +180,7 @@ def chat(req: ChatRequest):
             reply = abstention_reply(tier)
             save_chat(req.user_id, tier, True, req.message, reply, "[]", 
                      confidence=confidence, risk_details=details)
-            save_turn(req.user_id, req.message, reply)
+            save_chat_turn(req.user_id, req.message, text)
             return ChatResponse(
                 text=reply, 
                 citations=[], 
@@ -174,7 +198,7 @@ def chat(req: ChatRequest):
         reply = abstention_reply(tier)
         save_chat(req.user_id, tier, True, req.message, reply, "[]",
                  confidence=confidence, risk_details=details)
-        save_turn(req.user_id, req.message, reply)
+        save_chat_turn(req.user_id, req.message, text)
         return ChatResponse(
             text=reply, 
             citations=[], 
@@ -200,7 +224,7 @@ def chat(req: ChatRequest):
         reply = abstention_reply(3)
         save_chat(req.user_id, 3, True, req.message, reply, "[]",
                  confidence=confidence, risk_details=details)
-        save_turn(req.user_id, req.message, reply)
+        save_chat_turn(req.user_id, req.message, text)
         return ChatResponse(
             text=reply, 
             citations=[], 
@@ -219,7 +243,7 @@ def chat(req: ChatRequest):
     # 8) Save logs + update memory
     save_chat(req.user_id, tier, False, req.message, text, str(citations),
              confidence=confidence, risk_details=details)
-    save_turn(req.user_id, req.message, text)
+    save_chat_turn(req.user_id, req.message, text)
 
     return ChatResponse(
         text=text, 
@@ -237,6 +261,17 @@ def chat(req: ChatRequest):
 
 def _dict_factory(cursor, row):  
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}  
+
+@app.get("/conversation/history/{user_id}")
+def get_user_history(user_id: str, limit: int = 20):
+    history = get_conversation_history(user_id, limit=limit, hours_back=24*7)
+    stats = get_user_conversation_stats(user_id)
+    return {
+        "user_id": user_id,
+        "history": history,
+        "stats": stats,
+        "has_history": len(history) > 0
+    }
 
 @app.get("/reviews", response_model=list[ReviewListItem])  
 def list_reviews(  
