@@ -18,3 +18,29 @@
   url: https://www.apa.org/topics/stress/tips
 - id: APA_sleep
   url: https://www.apa.org/news/press/releases/2023/12/sleep-deprivation-anxious
+- id: CBT_exam
+  url: https://www.apa.org/ptsd-guideline/patients-and-families/cognitive-behavioral
+- id: Grounding_CBT
+  url: https://www.therapistaid.com/therapy-article/grounding-techniques-article
+- id: Breathing_CBT
+  url: https://www.health.harvard.edu/mind-and-mood/relaxation-techniques-breath-control-helps-quell-errant-stress-response
+- id: Mood_tracking
+  url: https://www.apaservices.org/practice/business/technology/tech-talk/wellness-treatment-digital-mental-health
+- id: Test_anxiety
+  url: https://academicresourcecenter.harvard.edu/test-anxiety
+- id: Active_recall
+  url: https://www.retrievalpractice.org/
+- id: Social_support
+  url: https://www.apa.org/monitor/2019/05/ce-corner-isolation
+- id: Crisis_resources
+  url: https://988lifeline.org/
+- id: Nutrition_exam
+  url: https://www.health.harvard.edu/mind-and-mood/foods-linked-to-better-brainpower
+- id: Exercise_anxiety
+  url: https://www.apa.org/topics/exercise-fitness/stress
+- id: Resilience
+  url: https://www.apa.org/topics/resilience
+- id: Time_management
+  url: https://www.purdueglobal.edu/blog/student-life/time-management-busy-college-students/
+- id: Mindfulness
+  url: https://www.mindful.org/meditation/mindfulness-getting-started/
