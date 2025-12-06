@@ -1,3 +1,5 @@
+# core/composer.py
+
 # from openai import OpenAI
 # import os
 # from dotenv import load_dotenv
@@ -123,7 +125,6 @@
 #     tags = render_citations(hits, allowed_tags)
 #     return text, tags
 
-# core/composer.py
 
 from openai import OpenAI
 import os

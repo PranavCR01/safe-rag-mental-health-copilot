@@ -1,3 +1,5 @@
+#scripts/ingest.py
+
 import json, faiss, numpy as np, tiktoken, os, yaml
 from openai import OpenAI
 from dotenv import load_dotenv

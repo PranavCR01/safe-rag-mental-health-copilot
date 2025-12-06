@@ -1,3 +1,4 @@
+#core/retriever.py
 import os, json, yaml, faiss, numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
