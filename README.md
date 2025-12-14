@@ -105,7 +105,7 @@ All interactions are logged in the **Audit Log** for human-in-the-loop review, w
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/safe-rag-mental-health-copilot.git
+git clone https://github.com/PranavCR01/safe-rag-mental-health-copilot.git
 cd safe-rag-mental-health-copilot
 ```
 
