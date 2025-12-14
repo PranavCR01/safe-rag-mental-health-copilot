@@ -38,9 +38,10 @@ CRISIS_PATTERNS = {
 # Tier 2: Heightened anxiety
 HEIGHTENED_PATTERNS = {
     r"\bpanic(?:king|ked| attack)?\b": 0.70,
-    r"\b(?:can'?t|cannot) breathe\b": 0.75,
+    r"\b(?:can'?t|cannot|unable) breathe\b": 0.75,
     r"\boverwhelmed\b": 0.60,
     r"\bshaking\b": 0.55,
+    r"\bbreathe\b": 0.50,
     r"\blosing my mind\b": 0.65,
     r"\bhopeless(?:ness)?\b": 0.70,
     r"\bnumb\b": 0.60,
@@ -61,6 +62,7 @@ NORMAL_PATTERNS = {
     r"\bexam\b": 0.30,
     r"\btest\b": 0.30,
     r"\bstudy(?:ing)?\b": 0.35,
+    r"\bhello\b": 0.90,
 }
 
 # Sarcasm detection

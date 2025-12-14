@@ -213,7 +213,7 @@ for idx, message in enumerate(st.session_state.messages):
                 # Tier Scores
                 tier_scores = risk_details.get("tier_scores", {})
                 if tier_scores:
-                    st.markdown("**📈 Tier Scores:**")
+                    st.markdown("**📈 Pattern Matching Scores:**")
                     score_cols = st.columns(3)
                     for i, t in enumerate([1, 2, 3]):
                         score = tier_scores.get(str(t), tier_scores.get(t, 0))
@@ -248,11 +248,20 @@ for idx, message in enumerate(st.session_state.messages):
 user_input = st.chat_input("How are you feeling about your exams?")
 
 if user_input:
+    # Add user message to session state
     st.session_state.messages.append({
         "role": "user",
         "content": user_input
     })
     
+    # Display user message immediately
+    st.markdown(f"""
+    <div class="user-message-container">
+        <div class="user-message">{user_input}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get assistant response
     with st.spinner("💭 Thinking..."):
         response_data = send_message(user_input)
     
@@ -274,6 +283,7 @@ if user_input:
             "metadata": metadata
         })
         
+        # Only rerun after assistant response is added
         st.rerun()
 
 # Footer
