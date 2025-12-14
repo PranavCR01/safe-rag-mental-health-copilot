@@ -93,7 +93,7 @@ All interactions are logged in the **Audit Log** for human-in-the-loop review, w
 
 ## 📦 Prerequisites
 
-- **Python**: 3.10+
+- **Python**: 3.10, 3.11 or 3.12 (REQUIRED - other versions may cause compatibility issues)
 - **OpenAI API Key**: Required
 - **RAM**: 4GB minimum (8GB recommended)
 - **Disk Space**: ~500MB
@@ -128,7 +128,17 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Set Up Knowledge Base
+### 4. ⚙️ Configuration
+
+Create `.env` file:
+
+```bash
+OPENAI_API_KEY=sk-your-actual-key-here
+```
+
+---
+
+### 5. Set Up Knowledge Base
 
 ```bash
 python ingest.py
@@ -139,16 +149,6 @@ Expected output:
 ✓ Loaded 46 chunks from data/sources.yaml
 ✓ Generated embeddings using text-embedding-3-small
 ✓ Created FAISS index: data/faiss_index.index
-```
-
----
-
-## ⚙️ Configuration
-
-Create `.env` file:
-
-```bash
-OPENAI_API_KEY=sk-your-actual-key-here
 ```
 
 ---
