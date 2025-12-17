@@ -41,8 +41,6 @@ The **Safe RAG Mental Health Copilot** is a human-centered conversational AI sys
 - **Persistent Memory**: SQLite conversation history for personalization
 - **Zero Hallucinations**: 100% citation rate with verified evidence
 
-**Research Paper**: [Safe RAG for Mental Health Copilot: Supporting Exam Anxiety with Human-Centered AI](./HCDS_Final_Report.pdf)
-
 **Authors**: Shobha Rani Ganapati Bhat, Pranav Rajesh Charakondala, Chandra Sekhar Ananthabhotla  
 **Institution**: University of Illinois at Urbana-Champaign  
 **Course**: CS 598 - Human-Centered Data Science (Fall 2024)
