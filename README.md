@@ -402,7 +402,7 @@ MIT License - see [LICENSE](LICENSE)
 
 ## 📞 Contact
 
-**Research Questions**: [Your emails here]
+**Research Questions**: srg8@illinois.edu prc4@illinois.edu
 
 **Mental Health Support**: Call 988 or visit [988lifeline.org](https://988lifeline.org/)
 
